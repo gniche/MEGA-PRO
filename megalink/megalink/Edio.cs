@@ -1,21 +1,41 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.IO;
 using System.Text;
-using System.Threading.Tasks;
 using System.IO.Ports;
 using System.Threading;
 
 namespace megalink
 {
-
     public class FileInfo
     {
+        const byte ATTR_DIR = 0b00010000; //32
+        const byte ATTR_FILE = 0b00010000; //16
         public string name;
         public int size;
         public UInt16 date;
         public UInt16 time;
         public byte attrib;
+        public bool IsDirectory()
+        {
+            return (attrib & ATTR_DIR) >> 4 == 1;
+        }
+        public override string ToString()
+        {
+            return $"{name.PadRight(30)} | {formatSize().PadLeft(7)} | date:{date} | time:{time} | attr: {(IsDirectory() ? "D" : "F")}";
+        }
+
+        string formatSize()
+        {
+            var fSize= size;
+            if (fSize < 1024) return fSize + "b";
+            fSize = fSize / 1024;
+            if(fSize < 1024) return fSize + "kb";
+            fSize = fSize / 1024;
+            if(fSize < 1024) return fSize + "mb";
+            fSize = fSize / 1024;
+            return fSize + "gb";
+        }
+        
     }
 
     public class Vdc
@@ -36,7 +56,7 @@ namespace megalink
 
     }
 
-    class Edio
+    public class Edio
     {
 
         const int ACK_BLOCK_SIZE = 1024;
@@ -54,9 +74,9 @@ namespace megalink
         public const int SIZE_SRAM = 0x80000;
         public const int SIZE_BRAM = 0x80000;
 
-        public const int ADDR_FLA_MENU = 0x00000; //boot fails m68K code
-        public const int ADDR_FLA_FPGA = 0x40000; //boot fails fpga code
-        public const int ADDR_FLA_ICOR = 0x80000; //mcu firmware update
+        public const int ADDR_FLA_MENU = 0x00000;       //boot fails m68K code
+        public const int ADDR_FLA_FPGA = 0x40000;       //boot fails fpga code
+        public const int ADDR_FLA_ICOR = 0x80000;       //mcu firmware update
 
         public const byte FAT_READ = 0x01;
         public const byte FAT_WRITE = 0x02;
@@ -70,90 +90,101 @@ namespace megalink
         public const byte HOST_RST_SOFT   = 1;
         public const byte HOST_RST_HARD   = 2;
 
-        const byte CMD_STATUS = 0x10;
-        const byte CMD_GET_MODE = 0x11;
-        const byte CMD_IO_RST = 0x12;
-        const byte CMD_GET_VDC = 0x13;
-        const byte CMD_RTC_GET = 0x14;
-        const byte CMD_RTC_SET = 0x15;
-        const byte CMD_FLA_RD = 0x16;
-        const byte CMD_FLA_WR = 0x17;
-        const byte CMD_FLA_WR_SDC = 0x18;
-        const byte CMD_MEM_RD = 0x19;
-        const byte CMD_MEM_WR = 0x1A;
-        const byte CMD_MEM_SET = 0x1B;
-        const byte CMD_MEM_TST = 0x1C;
-        const byte CMD_MEM_CRC = 0x1D;
-        const byte CMD_FPG_USB = 0x1E;
-        const byte CMD_FPG_SDC = 0x1F;
-        const byte CMD_FPG_FLA = 0x20;
+        const byte CMD_STATUS = 0x10;                   // checks last executed cmd status - success 0
+        const byte CMD_GET_MODE = 0x11;                 // checks last executed cmd status - success 0
+        const byte CMD_IO_RST = 0x12;                   // IO Reset/ Service Mode
+        const byte CMD_GET_VDC = 0x13;                  // Checks VDC (Valtages ?)
+        const byte CMD_RTC_GET = 0x14;                  // Get RTC Clock
+        const byte CMD_RTC_SET = 0x15;                  // Set RTC Clock
+        const byte CMD_FLA_RD = 0x16;                   // Reads Flash memory
+        const byte CMD_FLA_WR = 0x17;                   // Writes Flash memory
+        const byte CMD_FLA_WR_SDC = 0x18;               // Writes Flash memory (from SD card?) need path? 
+        const byte CMD_MEM_RD = 0x19;                   // Reads from Memory (Mega drive?)
+        const byte CMD_MEM_WR = 0x1A;                   // Writes block to Memory (Mega drive?)
+        const byte CMD_MEM_SET = 0x1B;                  // Sets value in Memory (Mega drive?) 
+        const byte CMD_MEM_TST = 0x1C;                  // Tests value in Memory (Mega drive?) 
+        const byte CMD_MEM_CRC = 0x1D;                  // Check CRC in Memory (Mega drive?) 
+        const byte CMD_FPG_USB = 0x1E;                  // Initializes the FPGA from file over usb
+        const byte CMD_FPG_SDC = 0x1F;                  // Initializes the FPGA from file on sd card
+        const byte CMD_FPG_FLA = 0x20;                  // Initializes the FPGA from address in flash
         const byte CMD_FPG_CFG = 0x21;
         const byte CMD_USB_WR = 0x22;
         const byte CMD_FIFO_WR = 0x23;
         const byte CMD_UART_WR = 0x24;
         const byte CMD_REINIT = 0x25;
-        const byte CMD_SYS_INF = 0x26;
+        const byte CMD_SYS_INF = 0x26;                  // Get system info (like on everdrive ??)
         const byte CMD_GAME_CTR = 0x27;
-        const byte CMD_UPD_EXEC = 0x28;
-        const byte CMD_HOST_RST = 0x29;
+        const byte CMD_UPD_EXEC = 0x28;                 // Execute update
+        const byte CMD_HOST_RST = 0x29;                 // Reset Mega drive
 
 
-        const byte CMD_DISK_INIT = 0xC0;
-        const byte CMD_DISK_RD = 0xC1;
-        const byte CMD_DISK_WR = 0xC2;
-        const byte CMD_F_DIR_OPN = 0xC3;
-        const byte CMD_F_DIR_RD = 0xC4;
-        const byte CMD_F_DIR_LD = 0xC5;
-        const byte CMD_F_DIR_SIZE = 0xC6;
-        const byte CMD_F_DIR_PATH = 0xC7;
-        const byte CMD_F_DIR_GET = 0xC8;
-        const byte CMD_F_FOPN = 0xC9;
-        const byte CMD_F_FRD = 0xCA;
-        const byte CMD_F_FRD_MEM = 0xCB;
-        const byte CMD_F_FWR = 0xCC;
-        const byte CMD_F_FWR_MEM = 0xCD;
-        const byte CMD_F_FCLOSE = 0xCE;
-        const byte CMD_F_FPTR = 0xCF;
-        const byte CMD_F_FINFO = 0xD0;
-        const byte CMD_F_FCRC = 0xD1;
-        const byte CMD_F_DIR_MK = 0xD2;
-        const byte CMD_F_DEL = 0xD3;
+        const byte CMD_DISK_INIT = 0xC0;                // Initialize SD card ??
+        const byte CMD_DISK_RD = 0xC1;                  // Raw read SD card ??
+        const byte CMD_DISK_WR = 0xC2;                  // Raw write SD card ??
+        const byte CMD_F_DIR_OPN = 0xC3;            
+        const byte CMD_F_DIR_RD = 0xC4;                 // Reads a directory to get info on current directory (name, etc)
+        const byte CMD_F_DIR_LD = 0xC5;                 // Loads Directory before getting info (like bash cd)
+        const byte CMD_F_DIR_SIZE = 0xC6;               // Directory Size (after load
+        const byte CMD_F_DIR_PATH = 0xC7;               // Gets current path ?? I think
+        const byte CMD_F_DIR_GET = 0xC8;                //Gets all files in directory
+        //Files         
+        const byte CMD_F_FOPN = 0xC9;                   // Opens file
+        const byte CMD_F_FRD = 0xCA;                    // Reads contents of file
+        const byte CMD_F_FRD_MEM = 0xCB;                // Reads file in memory / Loads file into memory ??
+        const byte CMD_F_FWR = 0xCC;                    // Writes to opened file
+        const byte CMD_F_FWR_MEM = 0xCD;                // Writes to opened file in memory??
+        const byte CMD_F_FCLOSE = 0xCE;                 // Closes file
+        const byte CMD_F_FPTR = 0xCF;                   // Sets poiinter to file address of opened file ??
+        const byte CMD_F_FINFO = 0xD0;                  // get info of file by sd path
+        const byte CMD_F_FCRC = 0xD1;                   // Gets CRC of opened file
+        const byte CMD_F_DIR_MK = 0xD2;                 // Makes a new Directory
+        const byte CMD_F_DEL = 0xD3;                    // Deletes File by ds path
+            
+        const byte CMD_USB_RECOV = 0xF0;                // Recovery mode
+        const byte CMD_RUN_APP = 0xF1;                  // Return to app mode
 
-        const byte CMD_USB_RECOV = 0xF0;
-        const byte CMD_RUN_APP = 0xF1;
-
-        SerialPort port;
+        private SerialPort port;
 
         public Edio()
         {
+            Logger.dbg("Edio()");
+
             seek();
         }
 
         public Edio(string port_name)
         {
-            openConnrction(port_name);
+            Logger.dbg("Edio(string port_name)");
+
+            openConnection(port_name.Trim());
         }
 
         void seek()
         {
+            Logger.dbg("seek()");
+
             string[] ports = SerialPort.GetPortNames();
 
             for (int i = 0; i < ports.Length; i++)
             {
                 try
                 {
-                    openConnrction(ports[i]);
+                    openConnection(ports[i]);
+                    Logger.inf($"Current Directory {Directory.GetCurrentDirectory()}");
                     return;
                 }
-                catch (Exception) { }
+                catch (Exception e)
+                {
+                    // Console.Out.WriteLine(e.Message + "\n"+ e.StackTrace);
+                }
             }
 
             throw new Exception("EverDrive not found");
         }
 
-        void openConnrction(string pname)
+        void openConnection(string pname)
         {
-
+            Logger.dbg("openConnection(string pname)");
             try
             {
                 port = new SerialPort(pname);
@@ -166,19 +197,25 @@ namespace megalink
                 port.WriteTimeout = 2000;
                 return;
             }
-            catch (Exception) { }
-
-
+            catch (Exception e)
+            {
+                Logger.dbg($"Everdrive not found at {pname}");
+            }
+            
             try
             {
                 port.Close();
             }
-            catch (Exception) { }
-
-            port = null;
-
-            throw new Exception("EverDrive not found");
-
+            catch (Exception e)
+            {
+                Logger.err($"Failed to close port {pname} :  {e.Message}");
+            }
+            finally
+            {
+                port = null;
+                throw new Exception("EverDrive not found");
+            }
+            
         }
         public string PortName
         {
@@ -192,6 +229,8 @@ namespace megalink
 
         void tx32(int arg)
         {
+            Logger.dbg("tx32(int arg)");
+
             byte[] buff = new byte[4];
             buff[0] = (byte)(arg >> 24);
             buff[1] = (byte)(arg >> 16);
@@ -203,6 +242,8 @@ namespace megalink
 
         int rx32()
         {
+            Logger.dbg("rx32()");
+
             byte[] buff = new byte[4];
             rxData(buff, 0, buff.Length);
             return buff[3] | (buff[2] << 8) | (buff[1] << 16) | (buff[0] << 24);
@@ -211,6 +252,8 @@ namespace megalink
 
         void tx16(int arg)
         {
+            Logger.dbg("tx16(int arg)");
+
             byte[] buff = new byte[2];
             buff[0] = (byte)(arg >> 8);
             buff[1] = (byte)(arg);
@@ -220,6 +263,8 @@ namespace megalink
 
         public UInt16 rx16()
         {
+            Logger.dbg("rx16()");
+
             byte[] buff = new byte[2];
             rxData(buff, 0, buff.Length);
             return (UInt16)(buff[1] | (buff[0] << 8));
@@ -227,6 +272,8 @@ namespace megalink
 
         void tx8(int arg)
         {
+            Logger.dbg("tx8(int arg)");
+
             byte[] buff = new byte[1];
             buff[0] = (byte)(arg);
             txData(buff, 0, buff.Length);
@@ -234,17 +281,23 @@ namespace megalink
 
         public byte rx8()
         {
+            Logger.dbg("rx8()");
+
             return (byte)port.ReadByte();
         }
 
 
         void txData(byte[] buff)
         {
+            Logger.dbg("txData(byte[] buff)");
+
             txData(buff, 0, buff.Length);
         }
 
         void txData(byte[] buff, int offset, int len)
         {
+            Logger.dbg("txData(byte[] buff, int offset, int len)");
+
             while (len > 0)
             {
                 int block = 8192;
@@ -259,6 +312,8 @@ namespace megalink
 
         void txData(string str)
         {
+            Logger.dbg("txData(string str)");
+
             port.Write(str);
         }
 
@@ -266,6 +321,8 @@ namespace megalink
 
         void txDataACK(byte[] buff, int offset, int len)
         {
+            Logger.dbg("txDataACK(byte[] buff, int offset, int len)");
+
             while (len > 0)
             {
                 int resp = rx8();
@@ -285,6 +342,8 @@ namespace megalink
 
         void rxData(byte[] buff, int offset, int len)
         {
+            Logger.dbg("rxData(byte[] buff, int offset, int len)");
+
             for (int i = 0; i < len;)
             {
                 i += port.Read(buff, offset + i, len - i);
@@ -294,6 +353,8 @@ namespace megalink
 
         public byte[] rxData(int len)
         {
+            Logger.dbg("rxData(int len)");
+
             byte[] buff = new byte[len];
             rxData(buff, 0, len);
             return buff;
@@ -301,17 +362,23 @@ namespace megalink
 
         void rxData(byte[] buff, int len)
         {
+            Logger.dbg("rxData(byte[] buff, int len)");
+
             rxData(buff, 0, len);
         }
 
         void txString(string str)
         {
+            Logger.dbg("txString(string str)");
+
             tx16(str.Length);
             txData(str);
         }
 
         string rxString()
         {
+            Logger.dbg("rxString()");
+
             int len = rx16();
             byte[] buff = new byte[len];
             rxData(buff, 0, buff.Length);
@@ -320,6 +387,8 @@ namespace megalink
 
         FileInfo rxFileInfo()
         {
+            Logger.dbg("rxFileInfo()");
+
             FileInfo inf = new FileInfo();
 
             inf.size = rx32();
@@ -333,16 +402,21 @@ namespace megalink
 
         public SerialPort getPort()
         {
+            Logger.dbg("getPort()");
+
             return port;
         }
 
         public int dataAvailable()
         {
+            Logger.dbg("dataAvailable()");
+
             return port.BytesToRead;
         }
 
         public void flush()
         {
+            Logger.dbg("checkStatus()");
 
             int len = dataAvailable();
             if (len > 0x10000) len = 0x10000;
@@ -354,6 +428,8 @@ namespace megalink
 
         void txCMD(byte cmd_code)
         {
+            Logger.dbg("checkStatus()");
+
             byte[] cmd = new byte[4];
             cmd[0] = (byte)('+');
             cmd[1] = (byte)('+' ^ 0xff);
@@ -364,12 +440,16 @@ namespace megalink
 
         void checkStatus()
         {
+            Logger.dbg("checkStatus()");
+
             int resp = getStatus();
             if (resp != 0) throw new Exception("operation error: " + resp.ToString("X2"));
         }
 
         public int getStatus()
         {
+            Logger.dbg("dirPath()");
+
             int resp;
             txCMD(CMD_STATUS);
             resp = rx16();
@@ -380,12 +460,16 @@ namespace megalink
 
         public void diskInit()
         {
+            Logger.dbg("diskInit()");
+
             txCMD(CMD_DISK_INIT);
             checkStatus();
         }
 
         public void diskRead(int addr, byte slen, byte[] buff)
         {
+            Logger.dbg("diskRead(int addr, byte slen, byte[] buff)");
+
             byte resp;
 
             txCMD(CMD_DISK_RD);
@@ -401,17 +485,29 @@ namespace megalink
             }
 
         }
+        
 
 
         public void dirOpen(string path)
         {
+            Logger.dbg("dirPath()");
+
             txCMD(CMD_F_DIR_OPN);
             txString(path);
-            checkStatus();
+            try
+            {
+                checkStatus();
+            }
+            catch (Exception e)
+            {
+                Logger.dbg($"Could not open \"{path}\": {e}");
+                throw;
+            }
         }
 
         public FileInfo dirRead(UInt16 max_name_len)
         {
+            Logger.dbg("dirRead(UInt16 max_name_len)");
 
             int resp;
             if (max_name_len == 0) max_name_len = 0xffff;
@@ -419,7 +515,7 @@ namespace megalink
             tx16(max_name_len);//max name lenght
             resp = rx8();
 
-            if (resp != 0) throw new Exception("dir read error: " + resp.ToString("X2"));
+            if (resp != 0) throw new Exception($"dir read error: {resp:X2}");
 
             return rxFileInfo();
 
@@ -427,6 +523,7 @@ namespace megalink
 
         public void dirLoad(string path, int sorted)
         {
+            Logger.dbg("dirLoad(string path, int sorted)");
 
             txCMD(CMD_F_DIR_LD);
             tx8(sorted);
@@ -443,6 +540,8 @@ namespace megalink
 
         public FileInfo[] dirGetRecs(int start_idx, int amount, int max_name_len)
         {
+            Logger.dbg("dirGetRecs(int start_idx, int amount, int max_name_len)");
+
             FileInfo[] inf = new FileInfo[amount];
             byte resp;
 
@@ -451,12 +550,11 @@ namespace megalink
             tx16(amount);
             tx16(max_name_len);
 
-
-
+            
             for (int i = 0; i < amount; i++)
             {
                 resp = rx8();
-                if (resp != 0) throw new Exception("dir read error: " + resp.ToString("X2"));
+                if (resp != 0) throw new Exception($"dir read error: {resp:X2}");
                 inf[i] = rxFileInfo();
 
             }
@@ -466,6 +564,8 @@ namespace megalink
 
         public void dirMake(string path)
         {
+            Logger.dbg("dirMake(string path)");
+
             txCMD(CMD_F_DIR_MK);
             txString(path);
             int resp = getStatus();
@@ -477,6 +577,8 @@ namespace megalink
 
         public void fileOpen(string path, int mode)
         {
+            Logger.dbg("fileOpen(string path, int mode)");
+
             txCMD(CMD_F_FOPN);
             tx8(mode);
             txString(path);
@@ -485,6 +587,8 @@ namespace megalink
 
         public void fileRead(byte[] buff, int offset, int len)
         {
+            Logger.dbg("fileRead(int addr, int len)");
+
 
             txCMD(CMD_F_FRD);
             tx32(len);
@@ -495,7 +599,7 @@ namespace megalink
                 int block = 4096;
                 if (block > len) block = len;
                 int resp = rx8();
-                if (resp != 0) throw new Exception("file read error: " + resp.ToString("X2"));
+                if (resp != 0) throw new Exception($"file read error: {resp:X2}");
 
                 rxData(buff, offset, block);
                 offset += block;
@@ -507,6 +611,7 @@ namespace megalink
 
         public void fileRead(int addr, int len)
         {
+            Logger.dbg("fileRead(int addr, int len)");
 
 
             while (len > 0)
@@ -529,6 +634,8 @@ namespace megalink
 
         public void fileWrite(byte[] buff, int offset, int len)
         {
+            Logger.dbg("fileWrite(byte[] buff, int offset, int len)");
+
             txCMD(CMD_F_FWR);
             tx32(len);
             txDataACK(buff, offset, len);
@@ -537,6 +644,8 @@ namespace megalink
 
         public void fileWrite(int addr, int len)
         {
+            Logger.dbg("fileWrite(int addr, int len)");
+            
             while (len > 0)
             {
                 int block = 0x10000;
@@ -556,6 +665,7 @@ namespace megalink
 
         public void fileSetPtr(int addr)
         {
+            Logger.dbg("fileSetPtr(int addr)");
             txCMD(CMD_F_FPTR);
             tx32(addr);
             checkStatus();
@@ -563,12 +673,14 @@ namespace megalink
 
         public void fileClose()
         {
+            Logger.dbg("fileClose()");
             txCMD(CMD_F_FCLOSE);
             checkStatus();
         }
 
         public void delRecord(string path)
         {
+            Logger.dbg("delRecord(string path)");
             txCMD(CMD_F_DEL);
             txString(path);
             checkStatus();
@@ -577,6 +689,7 @@ namespace megalink
 
         public void memWR(int addr, byte[] buff, int offset, int len)
         {
+            Logger.dbg("memWR(int addr, byte[] buff, int offset, int len)");
             if (len == 0) return;
             txCMD(CMD_MEM_WR);
             tx32(addr);
@@ -587,6 +700,7 @@ namespace megalink
 
         public void memRD(int addr, byte[] buff, int offset, int len)
         {
+            Logger.dbg("memRD(int addr, byte[] buff, int offset, int len)");
             if (len == 0) return;
             txCMD(CMD_MEM_RD);
             tx32(addr);
@@ -597,10 +711,11 @@ namespace megalink
 
         public FileInfo fileInfo(string path)
         {
+            Logger.dbg("fileInfo(string path)");
             txCMD(CMD_F_FINFO);
             txString(path);
             int resp = rx8();
-            if (resp != 0) throw new Exception("file access error: " + resp.ToString("X2"));
+            if (resp != 0) throw new Exception($"file access error: {resp:X2}");
             return rxFileInfo();
 
         }
@@ -639,6 +754,7 @@ namespace megalink
 
         public void memSet(byte val, int addr, int len)
         {
+            Logger.dbg("memSet(byte, int, int)");
             txCMD(CMD_MEM_SET);
             tx32(addr);
             tx32(len);
@@ -649,7 +765,7 @@ namespace megalink
 
         public bool memTest(byte val, int addr, int len)
         {
-
+            Logger.dbg("memTest(byte, int, int)");
             txCMD(CMD_MEM_TST);
             tx32(addr);
             tx32(len);
@@ -664,6 +780,7 @@ namespace megalink
 
         public UInt32 memCRC(int addr, int len)
         {
+            Logger.dbg("memCRC(int, int)");
             txCMD(CMD_MEM_CRC);
             tx32(addr);
             tx32(len);
@@ -675,6 +792,7 @@ namespace megalink
 
         public UInt32 fileCRC(int len)
         {
+            Logger.dbg("fileCRC(int)");
             int resp;
             txCMD(CMD_F_FCRC);
             tx32(len);
@@ -686,9 +804,11 @@ namespace megalink
 
             return (UInt32)rx32();
         }
-
+        
+        //Reads Flash memory
         public void flaRD(int addr, byte[] buff, int offset, int len)
         {
+            Logger.dbg("flaRD(int, byte[], int, int)");
             txCMD(CMD_FLA_RD);
             tx32(addr);
             tx32(len);
@@ -696,8 +816,10 @@ namespace megalink
         }
 
 
+        //Writes to Flash memory
         public void flaWR(int addr, byte[] buff, int offset, int len)
         {
+            Logger.dbg("flaWR(int, byte[], int, int)");
             txCMD(CMD_FLA_WR);
             tx32(addr);
             tx32(len);
@@ -707,6 +829,7 @@ namespace megalink
 
         public void fpgInit(byte[] data)
         {
+            Logger.dbg("fpgInit(byte[])");
             txCMD(CMD_FPG_USB);
             tx32(data.Length);
             txDataACK(data, 0, data.Length);
@@ -716,6 +839,7 @@ namespace megalink
 
         public void fpgInit(int flash_addr)
         {
+            Logger.dbg("fpgInit(int)");
             txCMD(CMD_FPG_FLA);
             tx32(flash_addr);
             tx8(0);//exec
@@ -724,7 +848,7 @@ namespace megalink
 
         public void fpgInit(string sd_path)
         {
-
+            Logger.dbg("fpgInit(string)");
             FileInfo f = fileInfo(sd_path);
             fileOpen(sd_path, FAT_READ);
             txCMD(CMD_FPG_SDC);
@@ -737,6 +861,7 @@ namespace megalink
         
         public bool isServiceMode()
         {
+            Logger.dbg("isServiceMode");
             txCMD(CMD_GET_MODE);
             byte resp = rx8();
             if (resp == 0xA1) return true;
@@ -745,6 +870,7 @@ namespace megalink
 
         public Vdc GetVdc()
         {
+            Logger.dbg("GetVdc");
             txCMD(CMD_GET_VDC);
             byte[] buff = rxData(Vdc.size);
             Vdc vdc = new Vdc(buff);
@@ -753,6 +879,7 @@ namespace megalink
 
         public RtcTime rtcGet()
         {
+            Logger.dbg("RTC Get");
             txCMD(CMD_RTC_GET);
             byte[] buff = rxData(RtcTime.size);
             RtcTime rtc = new RtcTime(buff);
@@ -761,6 +888,7 @@ namespace megalink
 
         public void rtcSet(DateTime dt)
         {
+            Logger.dbg("RTC Set");
             RtcTime rtc = new RtcTime(dt);
             byte[] vals = rtc.getVals();
             txCMD(CMD_RTC_SET);
@@ -769,6 +897,7 @@ namespace megalink
 
         public void hostReset(byte rst)
         {
+            Logger.dbg("Host Reset");
             txCMD(CMD_HOST_RST);
             tx8(rst);
         }
@@ -801,9 +930,10 @@ namespace megalink
             {
                 throw new Exception("current core matches to recovery copy");
             }
-            else if (status != 0)
+
+            if (status != 0)
             {
-                throw new Exception("recovery error: " + status.ToString("X2"));
+                throw new Exception($"recovery error: {status:X2}");
             }
 
         }
