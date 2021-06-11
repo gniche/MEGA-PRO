@@ -109,6 +109,13 @@ namespace megalink
                     continue;
                 }
 
+                if (s.Equals("-dir"))
+                {
+                    usb.Dir(args[i + 1]);
+                    i += 2;
+                    continue;
+                }
+
                 if (s.Equals("-mkdir"))
                 {
                     usb.makeDir(args[i + 1]);
@@ -120,7 +127,7 @@ namespace megalink
             }
 
             edio.hostReset(Edio.HOST_RST_OFF);
-            Console.WriteLine("");
+            Logger.nl();
 
         }
 
