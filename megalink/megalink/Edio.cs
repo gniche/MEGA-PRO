@@ -505,6 +505,23 @@ namespace megalink
             }
         }
 
+        public void dirPath()
+        {
+            Logger.dbg("dirPath()");
+
+            txCMD(CMD_F_DIR_PATH);
+            rxString();
+            try
+            {
+                checkStatus();
+            }
+            catch (Exception e)
+            {
+                // Console.Out.WriteLine($"Could not open \"{path}\": {e}");
+                throw;
+            }
+        }
+
         public FileInfo dirRead(UInt16 max_name_len)
         {
             Logger.dbg("dirRead(UInt16 max_name_len)");

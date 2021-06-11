@@ -1,13 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.IO;
 
 namespace megalink
 {
-    class Usbio
+    public class Usbio
     {
 
         Edio edio;
@@ -64,6 +60,24 @@ namespace megalink
             }
         }
 
+        public void Dir(string path)
+        {
+            if (path.ToLower().StartsWith("sd:") == false)
+            {
+                throw new Exception("incorrect dir path: " + path);
+            }
+            
+            edio.dirOpen(path.Substring(3));
+            edio.dirLoad(path.Substring(3), 0);
+
+
+            Console.WriteLine(path + "~ size: " + edio.dirGetSize());
+            foreach (var fileRecord in edio.dirGetRecs(0, edio.dirGetSize(), 50))
+            {
+                Console.WriteLine(path + fileRecord);
+            }
+        }
+        
         public void makeDir(string path)
         {
             path = path.Trim();
