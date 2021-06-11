@@ -27,8 +27,8 @@ namespace megalink
             catch (Exception x)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("");
-                Console.WriteLine("ERROR: " + x.Message);
+                Logger.nl();
+                Logger.err(x.Message);
                 Console.ResetColor();
             }
 
@@ -36,19 +36,7 @@ namespace megalink
 
         static void megalink(string[] args)
         {
-            try
-            {
-                edio = new Edio();
-            }
-            catch (Exception)
-            {
-                System.Threading.Thread.Sleep(500);
-                edio = new Edio();
-            }
-
-            Console.WriteLine("EverDrive found at " + edio.PortName);
-            Console.WriteLine("EDIO status: " + edio.getStatus().ToString("X4"));
-            Console.WriteLine("");
+            edio = getEdio(args);
 
             bool force_app_mode = true;
             for (int i = 0; i < args.Length; i++)
@@ -66,6 +54,32 @@ namespace megalink
             //edio.getConfig().print();
         }
 
-        
+        private static Edio getEdio(string[] args)
+        {
+            Edio result;
+            try
+            {
+                if (args.Length > 0 && args[0].Equals("-port"))
+                {
+                    Logger.inf($"opening port {args[1]}");
+                    result = new Edio(args[1]);
+                }
+                else
+                {
+                    result = new Edio();
+                }
+            }
+            catch (Exception)
+            {
+                System.Threading.Thread.Sleep(500);
+                result = new Edio();
+            }
+            
+            Logger.inf("EverDrive found at " + result.PortName);
+            Logger.inf("EDIO status: " + result.getStatus().ToString("X4"));
+            Console.WriteLine("");
+            
+            return result;
+        }
     }
 }
